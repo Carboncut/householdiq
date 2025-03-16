@@ -1,0 +1,23 @@
+fastapi==0.88.0
+alembic==1.11.1
+uvicorn==0.20.0
+requests==2.28.2
+pydantic==1.10.5
+psycopg2-binary==2.9.6
+sqlalchemy==1.4.46
+python-dotenv==0.21.0
+celery==5.2.7
+httpx==0.24.1
+python-json-logger==2.0.7
+neo4j==5.7.0
+
+# Use real versions or remove if you’re not using them
+iab-tcf==0.2.2
+
+python-Levenshtein==0.20.9
+numpy==1.23.0
+
+# This should be pinned to a valid PyPI version, not a Docker tag
+aerospike==16.0.2
+
+PyJWT==2.6.0

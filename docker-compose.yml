@@ -1,0 +1,221 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: householdiq_postgres
+    environment:
+      POSTGRES_USER: householdiq_user
+      POSTGRES_PASSWORD: householdiq_pass
+      POSTGRES_DB: householdiq_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "householdiq_user", "-d", "householdiq_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3.9-management
+    container_name: householdiq_rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: aggregator
+      RABBITMQ_DEFAULT_PASS: aggregator
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  aerospike:
+    image: aerospike:ce-8.0.0.5
+    container_name: householdiq_aerospike
+    ports:
+      - "3000:3000"
+      - "3001:3001"
+      - "3002:3002"
+    command: >
+      --foreground
+    # Add a healthcheck so Docker knows when Aerospike is actually ready
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "3000"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  neo4j:
+    image: neo4j:5.7
+    container_name: householdiq_neo4j
+    environment:
+      NEO4J_AUTH: "neo4j/neo4j_pass"
+    ports:
+      - "7687:7687"
+      - "7474:7474"
+    volumes:
+      - neo4j_data:/data
+
+  householdiq_ingestion:
+    build:
+      context: .
+      dockerfile: services/ingestion/Dockerfile
+    container_name: householdiq_ingestion
+    environment:
+      PYTHONPATH: "/app"
+      DATABASE_URL: "postgresql://householdiq_user:householdiq_pass@postgres:5432/householdiq_db"
+      AEROSPIKE_HOST: "aerospike"
+      AEROSPIKE_PORT: "3000"
+      RABBITMQ_HOST: "rabbitmq"
+      NEO4J_URI: "bolt://neo4j:7687"
+      NEO4J_USER: "neo4j"
+      NEO4J_PASSWORD: "neo4j_pass"
+      DEBUG: "true"
+      GLOBAL_SALT: "SUPER_SECURE_SALT"
+      BRIDGING_CONFIDENCE_THRESHOLD: "0.7"
+      DATA_RETENTION_DAYS: "30"
+      PRIVACY_MIN_THRESHOLD: "10"
+      PRIVACY_NOISE_EPSILON: "1.0"
+      USE_NEO4J_BRIDGING: "true"
+      SAMPLING_RATES: '{"impression":10000,"click":3000,"conversion":500}'
+      PRUNE_NEO4J_ENABLED: "true"
+      DP_MODE_ENABLED: "false"
+      ASYNC_INGESTION: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_started
+      aerospike:
+        condition: service_healthy
+      neo4j:
+        condition: service_started
+    ports:
+      - "8000:8000"
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn services.ingestion.app_ingestion:app --host 0.0.0.0 --port 8000 --reload"
+
+  householdiq_bridging_worker:
+    build:
+      context: .
+      dockerfile: services/bridging_worker/Dockerfile
+    container_name: householdiq_bridging_worker
+    environment:
+      PYTHONPATH: "/app"
+      DATABASE_URL: "postgresql://householdiq_user:householdiq_pass@postgres:5432/householdiq_db"
+      AEROSPIKE_HOST: "aerospike"
+      AEROSPIKE_PORT: "3000"
+      RABBITMQ_HOST: "rabbitmq"
+      NEO4J_URI: "bolt://neo4j:7687"
+      NEO4J_USER: "neo4j"
+      NEO4J_PASSWORD: "neo4j_pass"
+      DEBUG: "true"
+      GLOBAL_SALT: "SUPER_SECURE_SALT"
+      BRIDGING_CONFIDENCE_THRESHOLD: "0.7"
+      DATA_RETENTION_DAYS: "30"
+      PRIVACY_MIN_THRESHOLD: "10"
+      PRIVACY_NOISE_EPSILON: "1.0"
+      USE_NEO4J_BRIDGING: "true"
+      SAMPLING_RATES: '{"impression":10000,"click":3000,"conversion":500}'
+      PRUNE_NEO4J_ENABLED: "true"
+      DP_MODE_ENABLED: "false"
+    depends_on:
+      householdiq_ingestion:
+        condition: service_started
+      aerospike:
+        condition: service_healthy
+    command: >
+      sh -c "celery -A services.bridging_worker.worker_main worker --loglevel=INFO --concurrency=4"
+
+  householdiq_celery_beat:
+    build:
+      context: .
+      dockerfile: services/bridging_worker/Dockerfile
+    container_name: householdiq_celery_beat
+    environment:
+      PYTHONPATH: "/app"
+      DATABASE_URL: "postgresql://householdiq_user:householdiq_pass@postgres:5432/householdiq_db"
+      AEROSPIKE_HOST: "aerospike"
+      AEROSPIKE_PORT: "3000"
+      RABBITMQ_HOST: "rabbitmq"
+      NEO4J_URI: "bolt://neo4j:7687"
+      NEO4J_USER: "neo4j"
+      NEO4J_PASSWORD: "neo4j_pass"
+      DEBUG: "true"
+      DP_MODE_ENABLED: "false"
+    depends_on:
+      householdiq_ingestion:
+        condition: service_started
+      aerospike:
+        condition: service_healthy
+    command: >
+      sh -c "celery -A services.bridging_worker.worker_main beat --loglevel=INFO"
+
+  householdiq_lookup:
+    build:
+      context: .
+      dockerfile: services/lookup/Dockerfile
+    container_name: householdiq_lookup
+    environment:
+      PYTHONPATH: "/app"
+      DATABASE_URL: "postgresql://householdiq_user:householdiq_pass@postgres:5432/householdiq_db"
+      AEROSPIKE_HOST: "aerospike"
+      AEROSPIKE_PORT: "3000"
+      DEBUG: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      aerospike:
+        condition: service_healthy
+    ports:
+      - "8001:8000"
+    command: >
+      uvicorn services.lookup.app_lookup:app --host 0.0.0.0 --port 8000
+
+  householdiq_reporting:
+    build:
+      context: .
+      dockerfile: services/reporting/Dockerfile
+    container_name: householdiq_reporting
+    environment:
+      PYTHONPATH: "/app"
+      DATABASE_URL: "postgresql://householdiq_user:householdiq_pass@postgres:5432/householdiq_db"
+      AEROSPIKE_HOST: "aerospike"
+      AEROSPIKE_PORT: "3000"
+      NEO4J_URI: "bolt://neo4j:7687"
+      NEO4J_USER: "neo4j"
+      NEO4J_PASSWORD: "neo4j_pass"
+      DP_MODE_ENABLED: "false"
+      DEBUG: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      aerospike:
+        condition: service_healthy
+      neo4j:
+        condition: service_started
+    ports:
+      - "8002:8000"
+    command: >
+      uvicorn services.reporting.app_reporting:app --host 0.0.0.0 --port 8000
+
+  householdiq_customer:
+    build:
+      context: .
+      dockerfile: services/customer/Dockerfile
+    container_name: householdiq_customer
+    environment:
+      PYTHONPATH: "/app"
+      DATABASE_URL: "postgresql://householdiq_user:householdiq_pass@postgres:5432/householdiq_db"
+      DEBUG: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8003:8000"
+    command: >
+      uvicorn services.customer.app_customer:app --host 0.0.0.0 --port 8000
+
+volumes:
+  postgres_data:
+  neo4j_data:

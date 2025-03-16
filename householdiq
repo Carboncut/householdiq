@@ -1,0 +1,81 @@
+householdiq
+├── .env.example
+├── alembic
+│   ├── env.py
+│   └── versions
+│       ├── 2025_01_17_init_db.py
+│       ├── 2025_02_01_add_data_sharing.py
+│       ├── 2025_03_10_add_anonymized_tables.py
+│       ├── 2025_04_01_add_bridging_config.py
+│       ├── 2025_04_15_add_privacy_columns.py
+│       ├── 2025_05_20_add_frequency_capping.py
+│       ├── 2025_06_01_add_ml_bridging_threshold.py
+│       ├── 2025_07_10_add_multitenant_fields.py
+│       ├── 2025_08_01_add_attribution_tables.py
+│       ├── 2025_08_15_add_plugins_webhooks.py
+│       └── 2025_09_01_add_child_flags.py
+├── alembic.ini
+├── docker-compose.yml
+├── householdiq
+├── services
+│   ├── __init__.py
+│   ├── bridging_worker
+│   │   ├── Dockerfile
+│   │   ├── requirements.txt
+│   │   └── worker_main.py
+│   ├── common_lib
+│   │   ├── __init__.py
+│   │   ├── aerospike_cache.py
+│   │   ├── attribution.py
+│   │   ├── bridging_config_manager.py
+│   │   ├── bridging_graph.py
+│   │   ├── bridging_logic.py
+│   │   ├── bridging_tokens.py
+│   │   ├── cache.py
+│   │   ├── config.py
+│   │   ├── daily_aggregates.py
+│   │   ├── data_sharing.py
+│   │   ├── database.py
+│   │   ├── fuzzy.py
+│   │   ├── hashing.py
+│   │   ├── logging_config.py
+│   │   ├── ml_bridging_threshold.py
+│   │   ├── models.py
+│   │   ├── multi_tenant.py
+│   │   ├── openrtb_eids.py
+│   │   ├── plugin_manager.py
+│   │   ├── privacy.py
+│   │   ├── privacy_frameworks.py
+│   │   ├── real_time_capping.py
+│   │   ├── sampling.py
+│   │   ├── session_utils.py
+│   │   ├── tasks.py
+│   │   ├── tasks_beat.py
+│   │   └── webhooks.py
+│   ├── customer
+│   │   ├── Dockerfile
+│   │   ├── __init__.py
+│   │   ├── app_customer.py
+│   │   └── requirements.txt
+│   ├── ingestion
+│   │   ├── Dockerfile
+│   │   ├── __init__.py
+│   │   ├── app_ingestion.py
+│   │   ├── requirements.txt
+│   │   └── tasks.py
+│   ├── lookup
+│   │   ├── Dockerfile
+│   │   ├── __init__.py
+│   │   ├── app_lookup.py
+│   │   └── requirements.txt
+│   └── reporting
+│       ├── Dockerfile
+│       ├── __init__.py
+│       ├── app_reporting.py
+│       └── requirements.txt
+└── tests
+    ├── test_data_sharing.py
+    ├── test_explain.py
+    ├── test_ingest.py
+    ├── test_plugins.py
+    └── test_real_time_capping.py
