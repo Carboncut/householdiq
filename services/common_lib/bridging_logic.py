@@ -9,7 +9,7 @@ def attempt_bridging(new_event: EphemeralEvent, db: Session, aero_client: Aerosp
     if not new_event.consent_flags or not new_event.consent_flags.cross_device_bridging:
         logger.debug(f"Skipping bridging for event {new_event.id}: no cross_device_bridging.")
         return
-    if new_event.is_child or new_event.device_child_flag:
+    if new_event.partial_keys.get('isChild', False) or new_event.partial_keys.get('deviceChildFlag', False):
         logger.info(f"Skipping bridging for event {new_event.id}: child flag.")
         return
     if not settings.USE_NEO4J_BRIDGING:

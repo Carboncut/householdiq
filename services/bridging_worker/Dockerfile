@@ -14,6 +14,3 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY services /app/services
 
 ENV PYTHONPATH="/app"
-
-# Default command: run the bridging worker
-CMD ["celery", "-A", "services.bridging_worker.worker_main", "worker", "--loglevel=INFO"]

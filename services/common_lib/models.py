@@ -1,9 +1,12 @@
+from typing import Any, Optional
 from sqlalchemy import (
     Column, String, Float, DateTime, Integer, Boolean, JSON,
     ForeignKey, Text, func
 )
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import relationship, declarative_base
+from datetime import datetime
+import json
 
 Base = declarative_base()
 
@@ -24,26 +27,80 @@ class ConsentFlags(Base):
 
 class EphemeralEvent(Base):
     __tablename__ = "ephemeral_events"
+
     id = Column(Integer, primary_key=True)
-    ephem_id = Column(String, index=True)
-    partial_keys = Column(JSON, default={})
-    event_type = Column(String, default="impression")
-    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+    ephem_id = Column(String, nullable=False)
+    partial_keys = Column(JSON, nullable=False)
+    event_type = Column(String, nullable=False)
     campaign_id = Column(String, nullable=True)
-
     partner_id = Column(Integer, ForeignKey("partners.id"), nullable=False)
-    partner = relationship("Partner")
-
-    consent_flags_id = Column(Integer, ForeignKey("consent_flags.id"))
-    consent_flags = relationship("ConsentFlags", uselist=False)
-
+    consent_flags_id = Column(Integer, ForeignKey("consent_flags.id"), nullable=False)
     privacy_tcf_string = Column(String, nullable=True)
     privacy_us_string = Column(String, nullable=True)
+    timestamp = Column(DateTime, nullable=False, default=datetime.now)
 
-    tenant_namespace = Column(String, nullable=True)
+    # Relationships
+    consent_flags = relationship("ConsentFlags", backref="ephemeral_events")
 
-    is_child = Column(Boolean, default=False)
-    device_child_flag = Column(Boolean, default=False)
+    def __init__(self, **kwargs: Any):
+        """
+        Custom constructor so we can handle 'partial_keys' explicitly
+        while still letting SQLAlchemy map all other columns.
+        """
+        partial_keys = kwargs.pop('partial_keys', None)
+        super().__init__(**kwargs)
+
+        # If partial_keys was a string, parse as JSON
+        if isinstance(partial_keys, str):
+            try:
+                partial_keys = json.loads(partial_keys)
+            except json.JSONDecodeError:
+                partial_keys = {}
+
+        self.partial_keys = partial_keys if partial_keys is not None else {}
+
+    def get_partial_key(self, name: str) -> Any:
+        """Retrieve a value from partial_keys by name."""
+        if not self.partial_keys:
+            return None
+        return self.partial_keys.get(name)
+
+    def set_partial_key(self, name: str, value: Any) -> None:
+        """Set a value in partial_keys by name."""
+        if not self.partial_keys:
+            self.partial_keys = {}
+        self.partial_keys[name] = value
+
+    @property
+    def device_type(self) -> Optional[str]:
+        """
+        A read-only property to match any code that does `event.device_type`.
+        Returns `partial_keys["deviceType"]` or None if missing.
+        """
+        return self.get_partial_key("deviceType")
+
+    @property
+    def hashed_email(self) -> Optional[str]:
+        """Returns `partial_keys["hashedEmail"]`."""
+        return self.get_partial_key("hashedEmail")
+
+    @property
+    def hashed_ip(self) -> Optional[str]:
+        """Returns `partial_keys["hashedIP"]`."""
+        return self.get_partial_key("hashedIP")
+
+    @property
+    def is_child(self) -> bool:
+        """
+        Returns True/False based on partial_keys["isChild"]. 
+        Accepts either a boolean or a string like "true"/"false".
+        """
+        raw_val = self.get_partial_key("isChild")
+        if isinstance(raw_val, bool):
+            return raw_val
+        if isinstance(raw_val, str) and raw_val.lower() == "true":
+            return True
+        return False
 
 class BridgingReference(Base):
     __tablename__ = "bridging_references"
@@ -59,7 +116,6 @@ class DataSharingAgreement(Base):
     id = Column(Integer, primary_key=True)
     partner_id_initiator = Column(Integer, ForeignKey("partners.id"), nullable=False)
     partner_id_recipient = Column(Integer, ForeignKey("partners.id"), nullable=False)
-
     agreement_details = Column(Text, nullable=True)
     start_date = Column(DateTime(timezone=True), nullable=True)
     end_date = Column(DateTime(timezone=True), nullable=True)

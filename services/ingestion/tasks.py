@@ -9,8 +9,9 @@ from services.common_lib.bridging_tokens import generate_bridging_token
 
 import os
 
-BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
-BACKEND_URL = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/1")
+# -- Use RabbitMQ as broker, and either "rpc://" or "amqp://" as the result backend.
+BROKER_URL = os.getenv("CELERY_BROKER_URL", "amqp://aggregator:aggregator@rabbitmq:5672//")
+BACKEND_URL = os.getenv("CELERY_RESULT_BACKEND", "rpc://")
 
 celery_app = Celery("householdiq_ingestion_tasks", broker=BROKER_URL, backend=BACKEND_URL)
 
@@ -49,7 +50,7 @@ def short_circuit_deterministic(event_id: int, hashed_email: str):
         if not ev:
             logger.error(f"Event not found: {event_id}")
             return None
-        if ev.is_child or ev.device_child_flag:
+        if ev.partial_keys.get('isChild', False) or ev.partial_keys.get('deviceChildFlag', False):
             logger.info(f"Skip bridging for child event_id={event_id}")
             return None
 

@@ -1,0 +1,4 @@
+"""
+Ingestion service package initialization.
+"""
+

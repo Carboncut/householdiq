@@ -134,7 +134,7 @@ class Neo4jAdvancedLinker:
                 continue
             if not ev.consent_flags or not ev.consent_flags.cross_device_bridging:
                 continue
-            if ev.is_child or ev.device_child_flag:
+            if ev.partial_keys.get('isChild', False) or ev.partial_keys.get('deviceChildFlag', False):
                 continue
 
             score = self.compute_confidence(

@@ -1,7 +1,7 @@
 """Add child flags to ephemeral_events
 
-Revision ID: 2025_09_01_add_child_flags
-Revises: 2025_08_15_add_plugins_webhooks
+Revision ID: 2025_09_01_child_flags
+Revises: 2025_08_15_plugins_webhooks
 Create Date: 2025-09-01
 """
 from alembic import op

@@ -1,5 +1,5 @@
 from celery.schedules import crontab
-from services.common_lib.tasks import celery_app
+from services.common_lib.tasks import celery_app, batch_fuzzy_bridging
 from services.common_lib.config import settings
 from services.common_lib.database import SessionLocal
 from services.common_lib.logging_config import logger
@@ -7,11 +7,14 @@ from services.common_lib.daily_aggregates import flush_daily_aggregate
 from services.common_lib.aerospike_cache import AerospikeCache
 from neo4j import GraphDatabase
 from services.common_lib.ml_bridging_threshold import MLBridgingThresholdManager
-from services.common_lib.tasks import batch_fuzzy_bridging
+import asyncio
 
 def setup_periodic_tasks(app):
-    # flush daily aggregates every 60s
-    app.conf.beat_schedule = {
+    # flush daily aggregates every hour
+    if not hasattr(app.conf, 'beat_schedule'):
+        app.conf.beat_schedule = {}
+    
+    app.conf.beat_schedule.update({
         'flush-daily-agg': {
             'task': 'services.common_lib.tasks_beat.flush_daily_agg_task',
             'schedule': 3600.0
@@ -21,7 +24,8 @@ def setup_periodic_tasks(app):
             'task': 'services.common_lib.tasks.batch_fuzzy_bridging',
             'schedule': 10.0
         }
-    }
+    })
+    
     if settings.PRUNE_NEO4J_ENABLED:
         app.conf.beat_schedule['prune-neo4j-daily'] = {
             'task': 'services.common_lib.tasks_beat.prune_neo4j_task',
@@ -39,7 +43,7 @@ def flush_daily_agg_task():
     db = SessionLocal()
     try:
         aero = AerospikeCache()
-        flush_daily_aggregate(aero, db)
+        asyncio.run(flush_daily_aggregate(aero, db))
     except Exception as e:
         logger.error(f"Error flushing daily aggregates: {e}")
     finally:

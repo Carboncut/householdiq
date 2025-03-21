@@ -39,7 +39,7 @@ services:
       --foreground
     # Add a healthcheck so Docker knows when Aerospike is actually ready
     healthcheck:
-      test: ["CMD", "nc", "-z", "localhost", "3000"]
+      test: ["CMD", "asinfo", "-v", "status"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -124,8 +124,10 @@ services:
         condition: service_started
       aerospike:
         condition: service_healthy
+      neo4j:
+        condition: service_healthy
     command: >
-      sh -c "celery -A services.bridging_worker.worker_main worker --loglevel=INFO --concurrency=4"
+      sh -c "celery -A services.bridging_worker.worker_main worker --loglevel=INFO --concurrency=4 -Q bridging,celery"
 
   householdiq_celery_beat:
     build:
@@ -142,6 +144,14 @@ services:
       NEO4J_USER: "neo4j"
       NEO4J_PASSWORD: "neo4j_pass"
       DEBUG: "true"
+      GLOBAL_SALT: "SUPER_SECURE_SALT"
+      BRIDGING_CONFIDENCE_THRESHOLD: "0.7"
+      DATA_RETENTION_DAYS: "30"
+      PRIVACY_MIN_THRESHOLD: "10"
+      PRIVACY_NOISE_EPSILON: "1.0"
+      USE_NEO4J_BRIDGING: "true"
+      SAMPLING_RATES: '{"impression":10000,"click":3000,"conversion":500}'
+      PRUNE_NEO4J_ENABLED: "true"
       DP_MODE_ENABLED: "false"
     depends_on:
       householdiq_ingestion:
